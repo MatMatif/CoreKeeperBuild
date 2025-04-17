@@ -11,8 +11,8 @@ from tqdm import tqdm
 
 # --- Configuration ---
 FANDOM_BASE_URL = "https://core-keeper.fandom.com"
-WIKI_PATHS_INPUT_FILE = "armor.json"
-ITEM_DATA_OUTPUT_FILE = "armor_data_output.json"
+WIKI_PATHS_INPUT_FILE = "weapons.json"
+ITEM_DATA_OUTPUT_FILE = "weapons_data_output.json"
 IMAGE_OUTPUT_DIRECTORY = "images"
 HTTP_REQUEST_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
