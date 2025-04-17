@@ -9,7 +9,6 @@ import unicodedata
 import traceback
 from tqdm import tqdm
 
-# --- Configuration ---
 FANDOM_BASE_URL = "https://core-keeper.fandom.com"
 WIKI_PATHS_INPUT_FILE = "weaponLinks.json"
 ITEM_DATA_OUTPUT_FILE = "weapons_data_output.json"
@@ -17,9 +16,7 @@ IMAGE_OUTPUT_DIRECTORY = "images"
 HTTP_REQUEST_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
-SECONDS_BETWEEN_REQUESTS = 0.5
-
-# --- Utility Functions ---
+SECONDS_BETWEEN_REQUESTS = 0.0
 
 def normalize_and_clean_text(input_text):
     """Normalizes unicode, removes excess whitespace from text."""
@@ -73,9 +70,9 @@ def download_image_from_url(image_source_url, destination_file_path):
                  with open(destination_file_path, 'wb') as file_handle:
                      for data_chunk in final_response.iter_content(8192): file_handle.write(data_chunk)
                  return True
-             except requests.exceptions.RequestException: return False # Silence nested error
+             except requests.exceptions.RequestException: return False
         return False
-    except Exception: return False # Silence unexpected errors
+    except Exception: return False
 
 def parse_integer_sell_value(sell_value_text):
     """Extracts the integer sell value from text, returns None on failure."""
@@ -161,9 +158,7 @@ def parse_generic_effect(effect_label_text, effect_value_html_element):
     if link_tag and not value_text_cleaned: value_text_cleaned = normalize_and_clean_text(link_tag.get_text())
     numerical_value = None
     is_percentage_value = False
-    # Look for number, allows +/-, allows ., ignores commas within numbers for safety
-    # numerical_match = re.search(r'([+-]?\d{1,3}(?:,?\d{3})*(?:\.\d+)?)', value_text_cleaned.replace(',','')) # More robust?
-    numerical_match = re.search(r'([+-]?[\d\.]+)', value_text_cleaned) # Simpler version
+    numerical_match = re.search(r'([+-]?[\d\.]+)', value_text_cleaned)
     if numerical_match:
         try:
             numerical_value = float(numerical_match.group(1))
@@ -176,18 +171,15 @@ def parse_generic_effect(effect_label_text, effect_value_html_element):
     parsed_effect_data = None
     if numerical_value is not None:
         parsed_effect_data = { "type": effect_type_key, "value": numerical_value, "is_percentage": is_percentage_value, "text": full_value_display_text }
-    elif value_text_cleaned: # Capture non-numeric text values if they are not ignored labels
+    elif value_text_cleaned:
         parsed_effect_data = { "type": effect_type_key, "value": value_text_cleaned, "is_percentage": False, "text": full_value_display_text }
     return parsed_effect_data
 
-
-# --- Main Data Extraction Function (Using User's Logic Structure) ---
 
 def extract_item_data_from_infobox(page_content_soup, item_name_from_url_path):
     """Extracts structured item data using logic adapted from user's script."""
     infobox = page_content_soup.find('aside', class_='portable-infobox')
     if not infobox:
-        # print(f"    [Error] Infobox not found.") # Reduce noise
         return None
 
     infobox_title = infobox.find('h2', class_='pi-title')
@@ -196,11 +188,10 @@ def extract_item_data_from_infobox(page_content_soup, item_name_from_url_path):
     item_data = {
         "name": item_name, "id_wiki": item_name_from_url_path.replace(' ','_'),
         "max_level": None, "min_level": None, "rarity": None, "slot": None, "durability": None,
-        "category": [], "sell_value": None, "tooltip": None, "set_bonus": None, # Set bonus not handled
+        "category": [], "sell_value": None, "tooltip": None, "set_bonus": None,
         "image_url": None, "local_image_path": None, "levels": {}
     }
 
-    # 1. Extract Image
     image_figure = infobox.find('figure', class_='pi-image')
     if image_figure:
         img_tag = image_figure.find('img')
@@ -214,7 +205,7 @@ def extract_item_data_from_infobox(page_content_soup, item_name_from_url_path):
 
     tabbers = infobox.find_all('section', class_='pi-item pi-panel pi-border-color wds-tabber')
     found_levels_list = []
-    general_info_set = False  # Flag to éviter de dupliquer les données globales
+    general_info_set = False
 
     for tabber in tabbers:
         tab_contents = tabber.find_all('div', class_='wds-tab__content')
@@ -224,7 +215,7 @@ def extract_item_data_from_infobox(page_content_soup, item_name_from_url_path):
                 fields_in_tab = tab_content.select("div.pi-item.pi-data")
 
             if not fields_in_tab:
-                continue  # Skip this tab if it's empty
+                continue
 
             level_for_this_tab = None
             effects_for_this_level = []
@@ -293,9 +284,7 @@ def extract_item_data_from_infobox(page_content_soup, item_name_from_url_path):
 
 
     else:
-        # Case 2: No tabber found - Use user's logic on the whole infobox
-        # print(f"    [Debug] No tabber found. Applying single-level logic to infobox.") # Debug
-        fields = infobox.select("div.pi-item.pi-data") # Select all data rows in infobox
+        fields = infobox.select("div.pi-item.pi-data")
         level = None
         effects = []
         for field in fields:
@@ -334,30 +323,25 @@ def extract_item_data_from_infobox(page_content_soup, item_name_from_url_path):
             level_key_str = str(final_level)
             item_data["levels"][level_key_str] = {"effects": effects}
             found_levels_list.append(final_level)
-            # print(f"    [Debug] Stored single Level {level_key_str} data.") # Debug
 
-    # Finalize Min/Max Levels
     if found_levels_list:
         try:
             item_data["min_level"] = min(found_levels_list)
             item_data["max_level"] = max(found_levels_list)
         except ValueError: pass
 
-    # Deduce slot
     if not item_data["slot"]:
         categories_lower = [cat.lower() for cat in item_data.get("category", [])]
         slot_map = { "melee weapon": "Melee Weapon", "range weapon": "Range Weapon", "magic weapon": "Magic Weapon", "helm": "Helm", "chest": "Chest", "pants": "Pants", "necklace": "Necklace", "ring": "Ring", "off-hand": "Off-hand", "consumable": "Consumable", "bomb": "Bomb" }
         for cat_lower, slot_name in slot_map.items():
             if cat_lower in categories_lower: item_data["slot"] = slot_name; break
 
-    # Final check - Use a more specific check like missing levels AND rarity
     if not item_data["levels"] and item_data["rarity"] is None:
         print(f"    -> Warning: Extraction might have failed for {item_data['name']} (No levels and no rarity found).")
 
     return item_data
 
 
-# --- Main Execution Block --- (Identique)
 if __name__ == "__main__":
     try:
         with open(WIKI_PATHS_INPUT_FILE, 'r', encoding='utf-8') as input_file_handle:
@@ -400,7 +384,6 @@ if __name__ == "__main__":
         except requests.exceptions.RequestException as http_error: tqdm.write(f"    -> Error during request for {item_name_guess_from_path}: {http_error}")
         except Exception as processing_error:
              tqdm.write(f"    -> UNEXPECTED ERROR processing {item_name_guess_from_path}: {processing_error}")
-             # traceback.print_exc()
 
         time.sleep(SECONDS_BETWEEN_REQUESTS)
 

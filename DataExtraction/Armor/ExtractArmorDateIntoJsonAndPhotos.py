@@ -9,15 +9,14 @@ import unicodedata
 import traceback
 from tqdm import tqdm
 
-# --- Configuration ---
 FANDOM_BASE_URL = "https://core-keeper.fandom.com"
-WIKI_PATHS_INPUT_FILE = "armorLinks.json" # <--- Mis à jour pour les armes
-ITEM_DATA_OUTPUT_FILE = "armor_data_output.json" # <--- Mis à jour pour les armes
+WIKI_PATHS_INPUT_FILE = "armorLinks.json"
+ITEM_DATA_OUTPUT_FILE = "armor_data_output.json"
 IMAGE_OUTPUT_DIRECTORY = "images"
 HTTP_REQUEST_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
-SECONDS_BETWEEN_REQUESTS = 0.5
+SECONDS_BETWEEN_REQUESTS = 0.0
 
 def convert_label_to_type_key(label_text):
     """Converts a display label into a standardized key (e.g., 'melee_damage')."""
@@ -53,9 +52,7 @@ def parse_generic_effect(effect_label_text, effect_value_html_element):
     if link_tag and not value_text_cleaned: value_text_cleaned = normalize_and_clean_text(link_tag.get_text())
     numerical_value = None
     is_percentage_value = False
-    # Look for number, allows +/-, allows ., ignores commas within numbers for safety
-    # numerical_match = re.search(r'([+-]?\d{1,3}(?:,?\d{3})*(?:\.\d+)?)', value_text_cleaned.replace(',','')) # More robust?
-    numerical_match = re.search(r'([+-]?[\d\.]+)', value_text_cleaned) # Simpler version
+    numerical_match = re.search(r'([+-]?[\d\.]+)', value_text_cleaned)
     if numerical_match:
         try:
             numerical_value = float(numerical_match.group(1))
@@ -68,7 +65,7 @@ def parse_generic_effect(effect_label_text, effect_value_html_element):
     parsed_effect_data = None
     if numerical_value is not None:
         parsed_effect_data = { "type": effect_type_key, "value": numerical_value, "is_percentage": is_percentage_value, "text": full_value_display_text }
-    elif value_text_cleaned: # Capture non-numeric text values if they are not ignored labels
+    elif value_text_cleaned:
         parsed_effect_data = { "type": effect_type_key, "value": value_text_cleaned, "is_percentage": False, "text": full_value_display_text }
     return parsed_effect_data
 
@@ -135,7 +132,6 @@ def parse_min_max_damage(damage_value_html_element):
     return None
 
 
-# Utilisation de la fonction normalize du script utilisateur
 def normalize_and_clean_text(input_text):
     """Normalizes unicode, removes excess whitespace from text."""
     if input_text:
@@ -150,7 +146,6 @@ def create_safe_filename(raw_name):
     sanitized = sanitized.strip().replace(' ', '_')
     return sanitized.lower()
 
-# Gardé pour le téléchargement d'image
 def download_image_from_url(image_source_url, destination_file_path):
     """Downloads an image from a URL, attempting direct URL first, then fallback."""
     if not image_source_url: return False
@@ -184,45 +179,38 @@ def download_image_from_url(image_source_url, destination_file_path):
         return False
     except Exception: return False
 
-# --- Fonctions de Parsing (provenant du script utilisateur) ---
 
 def extract_effects_from_html(value_html):
     """Extracts effects from HTML string containing <br> tags."""
-    # Convertir l'objet Tag en string si nécessaire
     value_html_str = str(value_html)
     raw_lines = re.split(r'<br\s*/?>', value_html_str)
     effects = []
     for line in raw_lines:
-        # Utiliser BeautifulSoup pour nettoyer chaque ligne
         clean = BeautifulSoup(line, 'html.parser').get_text(strip=True)
         if not clean: continue
 
-        # Essayer de parser le format "+Value%? Label"
-        # Modifié pour être plus flexible : cherche le nombre PUIS le texte après
         num_match = re.search(r'([+-]?[\d\.]+)', clean)
         if num_match:
             number_str = num_match.group(1)
             try:
                 val = float(number_str) if '.' in number_str else int(number_str)
-                # Prendre le texte après le nombre trouvé
                 label_part_match = re.search(r'[\d\.]+%?\s*(.*)', clean)
-                label_text = label_part_match.group(1).strip() if label_part_match and label_part_match.group(1) else "unknown_effect" # Fallback
+                label_text = label_part_match.group(1).strip() if label_part_match and label_part_match.group(1) else "unknown_effect"
 
                 effects.append({
                     "type": label_text.lower().replace(' ', '_'),
                     "value": val,
-                    "is_percentage": '%' in clean, # Simple check for % sign
+                    "is_percentage": '%' in clean,
                     "text": clean
                 })
             except ValueError:
-                # Si la conversion échoue, traiter comme texte simple
                  effects.append({
                     "type": normalize_and_clean_text(clean).lower().replace(' ','_'),
                     "value": clean,
                     "is_percentage": False,
                     "text": clean
                 })
-        elif clean: # Si pas de nombre mais du texte
+        elif clean:
              effects.append({
                 "type": normalize_and_clean_text(clean).lower().replace(' ','_'),
                 "value": clean,
@@ -250,7 +238,6 @@ def extract_set_bonus_from_setbox(soup):
     return None
 
 def extract_set_bonus_from_section(soup):
-    # Cibler plus précisément pour éviter les sections "Salvage and Repair" ou "Technical"
     sections = soup.find_all("section", class_="pi-collapse")
     for section in sections:
         header = section.find("h2", class_="pi-header")
@@ -275,11 +262,10 @@ def parse_tabber_content(tab_content, item_name):
     parsed_tab = {
         "level": None,
         "effects": [],
-        "general_info": {} # Rarity, dura etc. found in this tab
+        "general_info": {}
     }
-    # Find data rows within the standard structure
     fields = tab_content.select("section.pi-group > div.pi-item.pi-data")
-    if not fields: fields = tab_content.select("div.pi-item.pi-data") # Fallback
+    if not fields: fields = tab_content.select("div.pi-item.pi-data")
 
     for field in fields:
         label_tag = field.find("h3", class_="pi-data-label")
@@ -291,11 +277,9 @@ def parse_tabber_content(tab_content, item_name):
         value_text = value_tag.get_text(separator=' ', strip=True)
         value_clean = normalize_and_clean_text(value_text)
 
-        # Extract level for this tab
         if label_key == "level":
             level_val = parse_item_level(value_tag)
             if level_val is not None: parsed_tab["level"] = level_val
-        # Extract temporary general info from this tab
         elif label_key == "rarity": parsed_tab["general_info"]["rarity"] = value_clean
         elif label_key == "slot": parsed_tab["general_info"]["slot"] = value_clean
         elif label_key == "durability": 
@@ -306,16 +290,15 @@ def parse_tabber_content(tab_content, item_name):
         elif label_key == "sell": parsed_tab["general_info"]["sell_value"] = parse_integer_sell_value(value_text)
         elif label_key == "tooltip": parsed_tab["general_info"]["tooltip"] = value_clean
         elif label_key == "type" and not parsed_tab["general_info"].get("category"): parsed_tab["general_info"]["category"] = parse_item_categories(value_tag)
-        # Extract effects/stats
         elif "damage" in label_key:
             damage = parse_min_max_damage(value_tag)
             if damage: parsed_tab["effects"].append({"type": label_key.replace(" ", "_"), "value": damage, "text": value_clean})
         elif label_key == "attack rate":
             rate = parse_float_attack_rate(value_tag)
             if rate is not None: parsed_tab["effects"].append({"type": "attack_rate", "value": rate, "text": value_clean})
-        elif label_key == "effects": # Handle multi-line effects specifically
+        elif label_key == "effects":
              parsed_tab["effects"].extend(extract_effects_from_html(value_tag))
-        else: # Generic effects
+        else:
             effect_list = parse_generic_effect(label_raw, value_tag)
             if effect_list: parsed_tab["effects"].extend(effect_list)
 
@@ -326,7 +309,6 @@ def parse_page_content(page_soup, default_item_name):
     """Parses the main page soup to find infoboxes and extract data."""
     extracted_items = []
 
-    # Find potential containers for infoboxes
     infobox_list_container = page_soup.find('div', class_='infobox-list')
     infoboxes_on_page = []
 
@@ -341,7 +323,6 @@ def parse_page_content(page_soup, default_item_name):
         print(f"    -> No infobox found on page for {default_item_name}")
         return []
 
-    # Process each infobox found
     for infobox in infoboxes_on_page:
         infobox_title = infobox.find('h2', class_='pi-title')
         item_name = normalize_and_clean_text(infobox_title.get_text()) if infobox_title else default_item_name
@@ -353,7 +334,6 @@ def parse_page_content(page_soup, default_item_name):
             "image_url": None, "local_image_path": None, "levels": {}
         }
 
-        # Extract Image URL from this infobox
         image_figure = infobox.find('figure', class_='pi-image')
         if image_figure:
             img_tag = image_figure.find('img')
@@ -363,7 +343,6 @@ def parse_page_content(page_soup, default_item_name):
                     cleaned_src = re.sub(r'/revision/latest.*', '', image_src)
                     item_data['image_url'] = urljoin(FANDOM_BASE_URL, cleaned_src if 'nocookie.net' in cleaned_src and '.' in cleaned_src.split('/')[-1] else image_src)
 
-        # Find the level tabber within this infobox
         level_tabber = infobox.find('section', class_='pi-item pi-panel pi-border-color wds-tabber')
         found_levels_list = []
         general_info_set = False
@@ -371,13 +350,13 @@ def parse_page_content(page_soup, default_item_name):
         if level_tabber:
             tab_contents = level_tabber.find_all('div', class_='wds-tab__content')
             for i, tab_content in enumerate(tab_contents):
-                parsed_tab_info = parse_tabber_content(tab_content, item_name) # Use helper
+                parsed_tab_info = parse_tabber_content(tab_content, item_name)
                 current_level = parsed_tab_info.get("level")
                 effects = parsed_tab_info.get("effects", [])
                 general_info_from_tab = parsed_tab_info.get("general_info", {})
 
                 if current_level is not None:
-                    if not general_info_set: # Set general info from first valid level tab
+                    if not general_info_set:
                         item_data.update({k: v for k, v in general_info_from_tab.items() if v is not None and (k not in item_data or item_data[k] is None or item_data[k] == [])})
                         general_info_set = True
 
@@ -387,8 +366,7 @@ def parse_page_content(page_soup, default_item_name):
                         item_data["levels"][level_key_str] = {"effects": valid_effects}
                         found_levels_list.append(current_level)
         else:
-            # No tabber, parse the whole infobox as one level
-            parsed_infobox_info = parse_tabber_content(infobox, item_name) # Use helper on whole infobox
+            parsed_infobox_info = parse_tabber_content(infobox, item_name)
             current_level = parsed_infobox_info.get("level", 1)
             effects = parsed_infobox_info.get("effects", [])
             general_info_from_infobox = parsed_infobox_info.get("general_info", {})
@@ -401,13 +379,11 @@ def parse_page_content(page_soup, default_item_name):
                 item_data["levels"][level_key_str] = {"effects": valid_effects}
                 found_levels_list.append(current_level)
 
-        # Finalize levels and slot for this specific item
         if found_levels_list:
             try: item_data["min_level"] = min(found_levels_list); item_data["max_level"] = max(found_levels_list);
             except ValueError: pass
 
-        # Set bonus (check outside the level loop, applies to the item)
-        item_data["set_bonus"] = extract_set_bonus(page_content_soup) # Pass the whole page soup
+        item_data["set_bonus"] = extract_set_bonus(page_content_soup)
 
         if not item_data["slot"] and item_data["category"]:
              categories_lower = [cat.lower() for cat in item_data["category"]]
@@ -415,15 +391,13 @@ def parse_page_content(page_soup, default_item_name):
              for cat_lower, slot_name in slot_map.items():
                  if cat_lower in categories_lower: item_data["slot"] = slot_name; break
 
-        if item_data["levels"] or item_data["rarity"]: # Only add if some data was extracted
+        if item_data["levels"] or item_data["rarity"]:
              extracted_items.append(item_data)
-        # else: print(f"    -> No significant data extracted for infobox: {item_name}")
 
 
     return extracted_items
 
 
-# --- Main Execution Block ---
 if __name__ == "__main__":
     try:
         with open(WIKI_PATHS_INPUT_FILE, 'r', encoding='utf-8') as input_file_handle:
@@ -451,10 +425,8 @@ if __name__ == "__main__":
             page_response.raise_for_status()
             page_content_soup = BeautifulSoup(page_response.content, 'html.parser')
 
-            # Call the main parsing function which handles single/multiple infoboxes
             parsed_items_on_page = parse_page_content(page_content_soup, item_name_guess_from_path)
 
-            # Process each item found on the page (usually 1, but handles multiple)
             for extracted_data in parsed_items_on_page:
                 if extracted_data:
                     image_local_relative_path = None
@@ -470,11 +442,9 @@ if __name__ == "__main__":
         except requests.exceptions.RequestException as http_error: tqdm.write(f"    -> Error during request for {item_name_guess_from_path}: {http_error}")
         except Exception as processing_error:
              tqdm.write(f"    -> UNEXPECTED ERROR processing {item_name_guess_from_path}: {processing_error}")
-             # traceback.print_exc()
 
         time.sleep(SECONDS_BETWEEN_REQUESTS)
 
-    # --- Save final results ---
     print(f"\nProcessing finished. Saving data for {len(all_extracted_items_data)} items...")
     try:
         with open(ITEM_DATA_OUTPUT_FILE, 'w', encoding='utf-8') as output_file_handle:
