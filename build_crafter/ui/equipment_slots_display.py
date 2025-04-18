@@ -1,168 +1,154 @@
 # ui/equipment_slots_display.py
 import tkinter as tk
-# from PIL import Image, ImageTk # Import à ajouter si/quand vous utilisez des images
+from tkinter import ttk
+from PIL import Image, ImageTk
+import os
 
 class EquipmentSlotsDisplay(tk.Frame):
-    """
-    Affiche une grille de slots d'équipement, inspirée de l'image.
-    """
-    # Définir les types de slots et leur position dans la grille (row, column)
-    # Ajustez ceci selon la disposition exacte que vous voulez
+    # --- MODIFICATION : Ajouter le slot d'arme principal au centre ---
     SLOT_LAYOUT = {
         'Helm': (0, 0), 'Amulet': (0, 1), 'Ring1': (0, 2),
-        'Chest': (1, 0),                     'Ring2': (1, 2),
-        'Pants': (2, 0),                     'Offhand': (2, 2), # Ou "Bag"?
+        'Chest': (1, 0), 'Weapon': (1, 1), 'Ring2': (1, 2), # <<< ICI
+        'Pants': (2, 0), 'Offhand': (2, 2),
         'Accessory': (3, 0), 'Gloves': (3, 1), 'Pet': (3, 2),
-        # Le slot central pourrait être (1, 1) mais on le gère séparément
     }
     GRID_ROWS = 4
     GRID_COLS = 3
 
-    def __init__(self, parent, slot_size=64, bg_color="#A0522D", # Couleur bois/marron
-                 slot_relief=tk.RIDGE, slot_border=2, *args, **kwargs):
-        super().__init__(parent, bg=bg_color, *args, **kwargs)
+    def __init__(self, parent, slot_size=70, bg_color="#A0522D",
+                 slot_relief=tk.RIDGE, slot_border=2,
+                 on_unequip_callback=None,
+                 *args, **kwargs):
 
+        self.on_unequip_callback = on_unequip_callback
+
+        # Appeler super() avec les options standards de Frame
+        super().__init__(parent, bg=bg_color, relief=slot_relief,
+                         borderwidth=slot_border, *args, **kwargs)
+
+        # --- Définir les attributs AVANT de les utiliser ---
         self.slot_size = slot_size
-        self.bg_color = bg_color
-        self.slot_relief = slot_relief
-        self.slot_border = slot_border
-        self.slots = {} # Dictionnaire pour stocker les widgets de chaque slot {slot_name: slot_frame}
-        self.slot_content = {} # Dictionnaire pour stocker le contenu (label/image) de chaque slot
-        self.placeholder_images = {} # Pour stocker les PhotoImage des placeholders
+        # self.bg_color = bg_color # Géré par super
+        self.slot_relief = slot_relief # Redéfinir ici pour cohérence si utilisé ailleurs
+        self.slot_border = slot_border # <<< DÉCOMMENTER / RAJOUTER CETTE LIGNE
 
-        self._configure_grid()
+        # --- Initialiser les dictionnaires ---
+        self.slots = {}
+        self.slot_content = {}
+        self.placeholder_images = {}
+        self.equipped_item_images = {}
+
+        # --- Appeler les méthodes de configuration APRÈS définition des attributs ---
+        self._configure_grid() # Maintenant self.slot_border existe
         self._create_slots()
-        self._create_central_area() # Créer la zone centrale après les slots
 
     def _configure_grid(self):
-        """Configure les lignes et colonnes de la grille pour centrer."""
-        # Donner du poids aux colonnes/lignes externes pour centrer la grille 3x4
-        # Si le parent s'étend, ce poids permettra de centrer.
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(self.GRID_COLS + 1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_rowconfigure(self.GRID_ROWS + 1, weight=1)
-
-        # Configurer les colonnes/lignes internes de la grille d'équipement
-        for c in range(self.GRID_COLS):
-             # Pas de weight pour garder la taille fixe, mais utiliser uniform pour taille égale
-             self.grid_columnconfigure(c + 1, weight=0, minsize=self.slot_size + self.slot_border*2, uniform="equip_grid")
-        for r in range(self.GRID_ROWS):
-             self.grid_rowconfigure(r + 1, weight=0, minsize=self.slot_size + self.slot_border*2, uniform="equip_grid")
-
+        # ... (code _configure_grid comme avant, il fonctionnera maintenant) ...
+        self.grid_columnconfigure(0, weight=1); self.grid_columnconfigure(self.GRID_COLS + 1, weight=1)
+        self.grid_rowconfigure(0, weight=1); self.grid_rowconfigure(self.GRID_ROWS + 1, weight=1)
+        for c in range(self.GRID_COLS): self.grid_columnconfigure(c + 1, weight=0, minsize=self.slot_size + self.slot_border*2, uniform="equip_grid")
+        for r in range(self.GRID_ROWS): self.grid_rowconfigure(r + 1, weight=0, minsize=self.slot_size + self.slot_border*2, uniform="equip_grid")
 
     def _create_slots(self):
-        """Crée et place les frames pour chaque slot d'équipement."""
+        """Crée TOUS les slots définis dans SLOT_LAYOUT."""
+        print("--- Creating Equipment Slots ---") # Debug
         for slot_name, (row, col) in self.SLOT_LAYOUT.items():
-            # Le décalage +1 est dû aux colonnes/lignes externes pour le centrage
             grid_row = row + 1
             grid_col = col + 1
+            print(f"Creating slot: {slot_name} at ({grid_row}, {grid_col})") # Debug
+
+            # Donner un fond légèrement différent au slot d'arme?
+            slot_bg = "#4a341f" if slot_name == 'Melee Weapon' else "#654321"
 
             slot_frame = tk.Frame(
-                self,
-                width=self.slot_size,
-                height=self.slot_size,
-                bg="#654321", # Couleur de fond plus sombre pour le slot vide
-                relief=self.slot_relief,
-                borderwidth=self.slot_border
+                self, width=self.slot_size, height=self.slot_size,
+                bg=slot_bg, relief=self.slot_relief, borderwidth=self.slot_border
             )
-            slot_frame.grid(row=grid_row, column=grid_col, padx=3, pady=3)
-            # Empêcher le frame de rétrécir
+            slot_frame.grid(row=grid_row, column=grid_col, padx=4, pady=4)
             slot_frame.grid_propagate(False)
 
-            # Ajouter un label à l'intérieur pour contenir l'icône/texte placeholder
-            # Il remplit le slot_frame
             content_label = tk.Label(
-                slot_frame,
-                text=slot_name[:3], # Texte placeholder simple (3 premières lettres)
-                font=("Segoe UI", 8),
-                bg=slot_frame.cget("bg"), # Même fond que le slot
-                fg="white"
+                slot_frame, text="", font=("Segoe UI", 9),
+                bg=slot_frame.cget("bg"), fg="white"
             )
-            content_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER) # Centrer le label
+            content_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
-            # --- TODO: Charger les images placeholder ---
-            # placeholder_path = f"images/placeholders/{slot_name.lower()}_slot.png"
-            # if os.path.exists(placeholder_path):
-            #    try:
-            #        img = Image.open(placeholder_path).resize((int(self.slot_size*0.8), int(self.slot_size*0.8)), Image.Resampling.NEAREST)
-            #        photo = ImageTk.PhotoImage(img)
-            #        self.placeholder_images[slot_name] = photo # Garder la référence
-            #        content_label.config(image=photo, text="") # Afficher l'image
-            #    except Exception as e:
-            #        print(f"Erreur chargement placeholder {placeholder_path}: {e}")
-            #        content_label.config(text="?") # Marquer erreur
+            # --- Charger les images placeholder ---
+            # Utiliser une icône générique pour l'arme ou un nom spécifique?
+            placeholder_filename = f"{slot_name.lower()}_slot.png"
+            if slot_name == 'Melee Weapon':
+                 placeholder_filename = "weapon_slot.png" # Utiliser une image générique?
+
+            placeholder_path = f"images/placeholders/{placeholder_filename}"
+            if os.path.exists(placeholder_path):
+               try:
+                   img = Image.open(placeholder_path).resize((int(self.slot_size*0.8), int(self.slot_size*0.8)), Image.Resampling.NEAREST)
+                   photo = ImageTk.PhotoImage(img)
+                   self.placeholder_images[slot_name] = photo
+                   content_label.config(image=photo, text="")
+                   content_label.image = photo
+               except Exception as e:
+                   print(f"Erreur chargement placeholder {placeholder_path}: {e}")
+                   content_label.config(text=slot_name[:3])
+            else:
+                # Texte placeholder différent pour l'arme?
+                default_text = "Wpn" if slot_name == 'Melee Weapon' else slot_name[:3]
+                content_label.config(text=default_text)
+                print(f"Placeholder image not found: {placeholder_path}")
 
             self.slots[slot_name] = slot_frame
-            self.slot_content[slot_name] = content_label # Garder référence au label
+            self.slot_content[slot_name] = content_label
 
-    def _create_central_area(self):
-         """Crée la zone centrale (pour le personnage)."""
-         center_row = 1 + 1 # Deuxième ligne de la grille interne (+1 pour décalage)
-         center_col = 1 + 1 # Deuxième colonne de la grille interne (+1 pour décalage)
+    # --- Méthode _create_central_area SUPPRIMÉE ---
 
-         central_frame = tk.Frame(
-              self,
-              width=self.slot_size,
-              height=self.slot_size,
-              bg="#4a341f", # Couleur encore plus sombre
-              relief=tk.SUNKEN,
-              borderwidth=self.slot_border
-         )
-         central_frame.grid(row=center_row, column=center_col, padx=3, pady=3)
-         central_frame.grid_propagate(False)
-
-         # Ajouter un label pour l'image du personnage (placeholder pour l'instant)
-         char_label = tk.Label(
-              central_frame,
-              text="Char",
-              font=("Segoe UI", 10, "bold"),
-              bg=central_frame.cget("bg"),
-              fg="lightgrey"
-         )
-         char_label.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-         # Garder référence si besoin
-         self.slots['character'] = central_frame
-         self.slot_content['character'] = char_label
-         # --- TODO: Charger l'image du personnage ---
-
-    # --- Méthodes Futures (pour équiper/déséquiper) ---
     def update_slot(self, slot_name, item_data=None):
          """Met à jour l'affichage d'un slot avec un item ou un placeholder."""
+         print(f"--- Updating Slot: {slot_name} ---") # Debug
+         print(f"Item Data Received: {item_data.get('name', 'None') if item_data else 'None'}") # Debug
          if slot_name not in self.slots:
-              print(f"Erreur: Slot '{slot_name}' inconnu.")
+              print(f"Erreur: Slot '{slot_name}' inconnu pour mise à jour.")
               return
 
          content_label = self.slot_content.get(slot_name)
-         if not content_label: return # Ne devrait pas arriver
+         if not content_label:
+              print(f"Erreur: Content label non trouvé pour slot '{slot_name}'.")
+              return
+
+         # Nettoyer l'ancienne image d'item pour ce slot
+         if slot_name in self.equipped_item_images:
+             del self.equipped_item_images[slot_name]
 
          if item_data and isinstance(item_data, dict):
               # Afficher l'image de l'item
               img_path = item_data.get('local_image_path')
               if img_path and os.path.exists(img_path):
+                  print(f"Loading item image: {img_path}") # Debug
                   try:
-                      # Redimensionner à une taille adaptée au slot
-                      img = Image.open(img_path).resize((int(self.slot_size*0.9), int(self.slot_size*0.9)), Image.Resampling.NEAREST) # NEAREST pour pixel art
+                      img = Image.open(img_path).resize((int(self.slot_size*0.9), int(self.slot_size*0.9)), Image.Resampling.NEAREST)
                       photo = ImageTk.PhotoImage(img)
-                      # Remplacer l'image OU la créer si pas déjà là
                       content_label.config(image=photo, text="")
-                      content_label.image = photo # ATTENTION: Référence essentielle!
+                      content_label.image = photo
+                      self.equipped_item_images[slot_name] = photo
+                      print("Item image updated.") # Debug
                   except Exception as e:
                       print(f"Erreur chargement image item {img_path}: {e}")
-                      content_label.config(image="", text="ERR") # Afficher texte erreur
+                      content_label.config(image="", text="ERR")
                       if hasattr(content_label, 'image'): del content_label.image
               else:
-                  # Pas d'image pour l'item, afficher son nom court?
+                  print(f"No valid image path for item: {img_path}") # Debug
                   content_label.config(image="", text=item_data.get('name', '?')[:3])
                   if hasattr(content_label, 'image'): del content_label.image
-
          else:
               # Revenir au placeholder
+              print("Reverting to placeholder.") # Debug
               placeholder_photo = self.placeholder_images.get(slot_name)
               if placeholder_photo:
                    content_label.config(image=placeholder_photo, text="")
-                   content_label.image = placeholder_photo # Garder référence
+                   content_label.image = placeholder_photo
+                   print("Placeholder image restored.") # Debug
               else:
-                   # Revenir au texte placeholder si pas d'image placeholder
-                   content_label.config(image="", text=slot_name[:3])
+                   default_text = "Wpn" if slot_name == 'Melee Weapon' else slot_name[:3]
+                   content_label.config(image="", text=default_text)
                    if hasattr(content_label, 'image'): del content_label.image
+                   print("Placeholder text restored.") # Debug
+         print(f"--- Slot Update Complete: {slot_name} ---") # Debug
