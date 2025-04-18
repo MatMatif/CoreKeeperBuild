@@ -207,81 +207,84 @@ def extract_item_data_from_infobox(page_content_soup, item_name_from_url_path):
     found_levels_list = []
     general_info_set = False
 
-    for tabber in tabbers:
-        tab_contents = tabber.find_all('div', class_='wds-tab__content')
-        for i, tab_content in enumerate(tab_contents):
-            fields_in_tab = tab_content.select("section.pi-group > div.pi-item.pi-data")
-            if not fields_in_tab:
-                fields_in_tab = tab_content.select("div.pi-item.pi-data")
+    if tabbers: # Check if tabbers exist FIRST
+        # --- Logic for Tabbed Infoboxes ---
+        for tabber in tabbers:
+            tab_contents = tabber.find_all('div', class_='wds-tab__content')
+            for i, tab_content in enumerate(tab_contents):
+                fields_in_tab = tab_content.select("section.pi-group > div.pi-item.pi-data")
+                if not fields_in_tab:
+                    fields_in_tab = tab_content.select("div.pi-item.pi-data")
 
-            if not fields_in_tab:
-                continue
-
-            level_for_this_tab = None
-            effects_for_this_level = []
-            tab_rarity = None
-            tab_durability = None
-            tab_category = []
-            tab_sell_value = None
-            tab_tooltip = None
-
-            for field in fields_in_tab:
-                label_tag = field.find("h3", class_="pi-data-label")
-                value_tag = field.find("div", class_="pi-data-value")
-                if not label_tag or not value_tag:
+                if not fields_in_tab:
                     continue
 
-                label_raw = label_tag.get_text()
-                label_key = normalize_and_clean_text(label_raw).lower()
-                value_text = value_tag.get_text(separator=' ', strip=True)
-                value_clean = normalize_and_clean_text(value_text)
+                level_for_this_tab = None
+                effects_for_this_level = [] # Reset for EACH tab
+                tab_rarity = None
+                tab_durability = None
+                tab_category = []
+                tab_sell_value = None
+                tab_tooltip = None
 
-                if label_key == "level":
-                    level_val = parse_item_level(value_tag)
-                    if level_val is not None:
-                        level_for_this_tab = level_val
-                elif label_key == "rarity":
-                    tab_rarity = value_clean
-                elif label_key == "durability":
-                    try:
-                        tab_durability = int(value_clean)
-                    except:
-                        pass
-                elif label_key == "category":
-                    tab_category = parse_item_categories(value_tag)
-                elif label_key == "sell":
-                    tab_sell_value = parse_integer_sell_value(value_text)
-                elif label_key == "tooltip":
-                    tab_tooltip = value_clean
-                elif label_key == "type" and not tab_category:
-                    tab_category = parse_item_categories(value_tag)
-                elif "damage" in label_key:
-                    damage = parse_min_max_damage(value_tag)
-                    if damage:
-                        effects_for_this_level.append({"type": label_key.replace(" ", "_"), "value": damage, "text": value_clean})
-                elif label_key == "attack rate":
-                    rate = parse_float_attack_rate(value_tag)
-                    if rate is not None:
-                        effects_for_this_level.append({"type": "attack_rate", "value": rate, "text": value_clean})
-                else:
-                    effect = parse_generic_effect(label_raw, value_tag)
-                    if effect:
-                        effects_for_this_level.append(effect)
+                for field in fields_in_tab:
+                    label_tag = field.find("h3", class_="pi-data-label")
+                    value_tag = field.find("div", class_="pi-data-value")
+                    if not label_tag or not value_tag:
+                        continue
 
-            if level_for_this_tab is not None and effects_for_this_level:
-                if not general_info_set:
-                    item_data["rarity"] = tab_rarity
-                    item_data["durability"] = tab_durability
-                    item_data["category"] = tab_category
-                    item_data["sell_value"] = tab_sell_value
-                    item_data["tooltip"] = tab_tooltip
-                    general_info_set = True
+                    label_raw = label_tag.get_text()
+                    label_key = normalize_and_clean_text(label_raw).lower()
+                    value_text = value_tag.get_text(separator=' ', strip=True)
+                    value_clean = normalize_and_clean_text(value_text)
 
-                level_key_str = str(level_for_this_tab)
-                if level_key_str not in item_data["levels"]:
-                    item_data["levels"][level_key_str] = {"effects": effects_for_this_level}
-                    found_levels_list.append(level_for_this_tab)
+                    if label_key == "level":
+                        level_val = parse_item_level(value_tag)
+                        if level_val is not None:
+                            level_for_this_tab = level_val
+                    elif label_key == "rarity":
+                        tab_rarity = value_clean
+                    elif label_key == "durability":
+                        try: tab_durability = int(re.search(r'\d+', value_clean).group())
+                        except: pass
+                    elif label_key == "category":
+                        tab_category = parse_item_categories(value_tag)
+                    elif label_key == "sell":
+                        tab_sell_value = parse_integer_sell_value(value_text)
+                    elif label_key == "tooltip":
+                        tab_tooltip = value_clean
+                    elif label_key == "type" and not tab_category:
+                         tab_category = parse_item_categories(value_tag)
+                    elif "damage" in label_key:
+                        damage = parse_min_max_damage(value_tag)
+                        if damage:
+                            effects_for_this_level.append({"type": label_key.replace(" ", "_"), "value": damage, "text": value_clean})
+                    elif label_key == "attack rate":
+                        rate = parse_float_attack_rate(value_tag)
+                        if rate is not None:
+                            effects_for_this_level.append({"type": "attack_rate", "value": rate, "text": value_clean})
+                    else:
+                        effect = parse_generic_effect(label_raw, value_tag)
+                        if effect:
+                            effects_for_this_level.append(effect)
 
+
+                if level_for_this_tab is not None and effects_for_this_level:
+                    if not general_info_set:
+                        item_data["rarity"] = tab_rarity
+                        item_data["durability"] = tab_durability
+                        item_data["category"] = tab_category
+                        item_data["sell_value"] = tab_sell_value
+                        item_data["tooltip"] = tab_tooltip
+                        general_info_set = True 
+
+                    level_key_str = str(level_for_this_tab)
+                    if level_key_str not in item_data["levels"]:
+                        if level_key_str not in item_data["levels"]:
+                            item_data["levels"][level_key_str] = {"effects": effects_for_this_level}
+                        else:
+                            print(f"Warning: Duplicate level {level_key_str} for item {item_data['name']}")
+                        found_levels_list.append(level_for_this_tab)
 
     else:
         fields = infobox.select("div.pi-item.pi-data")
@@ -297,9 +300,8 @@ def extract_item_data_from_infobox(page_content_soup, item_name_from_url_path):
             value_clean = normalize_and_clean_text(value_text)
 
             if label_key == "rarity": item_data["rarity"] = value_clean
-            elif label_key == "durability": 
-                try: 
-                    item_data["durability"] = int(value_clean); 
+            elif label_key == "durability":
+                try: item_data["durability"] = int(re.search(r'\d+', value_clean).group())
                 except: pass
             elif label_key == "category": item_data["category"] = parse_item_categories(value_tag)
             elif label_key == "sell": item_data["sell_value"] = parse_integer_sell_value(value_text)
@@ -307,7 +309,7 @@ def extract_item_data_from_infobox(page_content_soup, item_name_from_url_path):
             elif label_key == "type" and not item_data["category"]: item_data["category"] = parse_item_categories(value_tag)
             elif label_key == "level":
                 level_val = parse_item_level(value_tag)
-                if level_val is not None: level = level_val
+                if level_val is not None: level = level_val # Assign to the single 'level' variable
             elif "damage" in label_key:
                 damage = parse_min_max_damage(value_tag)
                 if damage: effects.append({"type": label_key.replace(" ", "_"), "value": damage, "text": value_clean})
@@ -318,11 +320,17 @@ def extract_item_data_from_infobox(page_content_soup, item_name_from_url_path):
                 effect = parse_generic_effect(label_raw, value_tag)
                 if effect: effects.append(effect)
 
-        final_level = level if level is not None else 1
+        # Assign the single level and its effects if any effects were found
+        final_level = level if level is not None else 1 # Default to level 1 if not specified
         if effects:
             level_key_str = str(final_level)
             item_data["levels"][level_key_str] = {"effects": effects}
             found_levels_list.append(final_level)
+        elif level is not None: # Handle case where level is specified but no effects parsed (unlikely but possible)
+             level_key_str = str(final_level)
+             if level_key_str not in item_data["levels"]:
+                 item_data["levels"][level_key_str] = {"effects": []}
+                 found_levels_list.append(final_level)
 
     if found_levels_list:
         try:
