@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 import json
 import re
 
+
 def extract_item_data(html_content, item_name="Unknown Item"):
     soup = BeautifulSoup(html_content, "html.parser")
 
@@ -16,7 +17,7 @@ def extract_item_data(html_content, item_name="Unknown Item"):
         "sell_value": None,
         "tooltip": None,
         "set_bonus": None,
-        "levels": {}
+        "levels": {},
     }
 
     level = None
@@ -44,12 +45,16 @@ def extract_item_data(html_content, item_name="Unknown Item"):
         elif label == "tooltip":
             item_data["tooltip"] = value
         elif label == "category":
-            categories = [li.get_text(strip=True) for li in value_element.find_all("li")]
+            categories = [
+                li.get_text(strip=True) for li in value_element.find_all("li")
+            ]
             if not categories:
-                categories = [a.get_text(strip=True) for a in value_element.find_all("a")]
+                categories = [
+                    a.get_text(strip=True) for a in value_element.find_all("a")
+                ]
             item_data["category"] = categories
         elif label == "sell":
-            match = re.search(r'(\d+)', value)
+            match = re.search(r"(\d+)", value)
             if match:
                 item_data["sell_value"] = int(match.group(1))
         elif label == "level":
@@ -59,22 +64,26 @@ def extract_item_data(html_content, item_name="Unknown Item"):
         elif "damage" in label:
             match = re.match(r"(\d+)[−–-](\d+)", value)
             if match:
-                effects.append({
-                    "type": "melee_damage",
-                    "value": {
-                        "min": int(match.group(1)),
-                        "max": int(match.group(2))
-                    },
-                    "text": f"{value} {label}"
-                })
+                effects.append(
+                    {
+                        "type": "melee_damage",
+                        "value": {
+                            "min": int(match.group(1)),
+                            "max": int(match.group(2)),
+                        },
+                        "text": f"{value} {label}",
+                    }
+                )
         elif "attack rate" in label:
-            match = re.search(r'([\d.]+)', value)
+            match = re.search(r"([\d.]+)", value)
             if match:
-                effects.append({
-                    "type": "attack_rate",
-                    "value": float(match.group(1)),
-                    "text": f"{value} {label}"
-                })
+                effects.append(
+                    {
+                        "type": "attack_rate",
+                        "value": float(match.group(1)),
+                        "text": f"{value} {label}",
+                    }
+                )
 
     if level is None:
         level = 1
@@ -89,7 +98,7 @@ def extract_item_data(html_content, item_name="Unknown Item"):
         "melee weapon": "Melee Weapon",
         "range weapon": "Range Weapon",
         "magic weapon": "Magic Weapon",
-        "off-hand": "Off-hand"
+        "off-hand": "Off-hand",
     }
 
     for category in item_data["category"]:
@@ -99,6 +108,7 @@ def extract_item_data(html_content, item_name="Unknown Item"):
             break
 
     return item_data
+
 
 if __name__ == "__main__":
     with open("input.html", "r", encoding="utf-8") as file:

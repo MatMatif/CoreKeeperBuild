@@ -7,7 +7,7 @@ wiki_path = "/wiki/Wooden_Sword"
 output_filename = "downloaded_page.html"
 
 headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 }
 
 if __name__ == "__main__":
@@ -18,7 +18,7 @@ if __name__ == "__main__":
         response = requests.get(full_url, headers=headers, timeout=20)
         response.raise_for_status()
 
-        with open(output_filename, 'w', encoding='utf-8') as file:
+        with open(output_filename, "w", encoding="utf-8") as file:
             file.write(response.text)
 
         saved_path = os.path.abspath(output_filename)
@@ -33,4 +33,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"⛔ Erreur inattendue : {e}")
         import traceback
+
         traceback.print_exc()
